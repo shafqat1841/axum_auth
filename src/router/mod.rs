@@ -1,7 +1,7 @@
 mod auth_routes;
 mod authorized_person_router;
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::{Arc, Mutex}};
 
 use axum::{Extension, Router, middleware, routing::get};
 
@@ -16,14 +16,18 @@ pub fn authorized_routes() -> axum::Router {
     authorized_person_api
 }
 
-pub fn create_routes(app_state: Arc<AppState>) -> axum::Router {
+pub fn create_routes(
+    app_state: Arc<AppState>,
+    refresh_tokens: Arc<Mutex<HashMap<String, String>>>,
+) -> axum::Router {
     let router = Router::new();
     let auth_api = auth_router();
     let authorized_api = authorized_routes();
     let api_route = router
         .nest("/auth", auth_api)
         .merge(authorized_api)
-        .layer(Extension(app_state));
+        .layer(Extension(app_state))
+        .layer(Extension(refresh_tokens));
 
     let home_route = Router::new().route("/", get(home));
 
