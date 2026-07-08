@@ -9,17 +9,20 @@ mod models;
 mod router;
 mod utils;
 
+use std::sync::Arc;
+
+use dotenv::dotenv;
+
 use axum::http::{
     HeaderValue, Method,
     header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
 };
-use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
-use dotenv::dotenv;
 use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
 
 use crate::{config::Config, db::DBClient};
+
 
 #[derive(Debug, Clone)]
 pub struct AppState {
@@ -63,9 +66,7 @@ fn get_app_state(configuration: &Config, pool: Pool<Postgres>) -> AppState {
     }
 }
 
-#[tokio::main]
-async fn main() {
-    dotenv().ok();
+pub async fn config_all_and_get_all_requirments() -> (AppState, CorsLayer) {
 
     let configuration = Config::init();
 
@@ -74,7 +75,15 @@ async fn main() {
     let cors = setup_cors();
 
     let app_state = get_app_state(&configuration, pool);
+    (app_state, cors)
+}
 
+
+#[tokio::main]
+async fn main() {
+    dotenv().ok();
+
+    let (app_state, cors) = config_all_and_get_all_requirments().await;
 
     // build our application with a single route
     let app_api = router::create_routes(Arc::new(app_state)).layer(cors);
