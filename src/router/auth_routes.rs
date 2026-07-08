@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use axum::{
     Extension, Json, Router,
@@ -75,6 +78,7 @@ pub async fn register(
 
 pub async fn login(
     Extension(app_state): Extension<Arc<AppState>>,
+    Extension(refresh_tokens): Extension<Arc<Mutex<HashMap<String, String>>>>,
     Json(body): Json<LoginUserDto>,
 ) -> Result<impl IntoResponse, HttpError> {
     // Validate the input
@@ -117,10 +121,36 @@ pub async fn login(
     )
     .map_err(|e| HttpError::server_error(e.to_string()))?;
 
+    // Create a refresh token and store it in the hashmap which act as a cache for refresh tokens
+    let refresh_token = token::create_token(
+        &user.id.to_string(),
+        &app_state.env.refresh_jwt_secret.as_bytes(),
+        app_state.env.refresh_jwt_maxage,
+    )
+    .map_err(|e| HttpError::server_error(e.to_string()))?;
+
+    match refresh_tokens.lock() {
+        Ok(mut tokens) => {
+            tokens.insert(refresh_token.clone(), refresh_token.clone());
+        }
+        Err(_) => {
+            return Err(HttpError::server_error(
+                "Failed to acquire lock for refresh tokens".to_string(),
+            ));
+        }
+    }
+
     let cookie_duration = time::Duration::minutes(app_state.env.jwt_maxage); // Convert minutes to seconds
     let cookie = Cookie::build(("token", token.clone()))
         .path("/")
         .max_age(cookie_duration)
+        .http_only(true)
+        .build();
+
+    let refresh_cookie_duration = time::Duration::days(app_state.env.refresh_jwt_maxage * 30); // Convert months to days
+    let refresh_cookie = Cookie::build(("token", refresh_token.clone()))
+        .path("/refresh_token")
+        .max_age(refresh_cookie_duration)
         .http_only(true)
         .build();
 
@@ -131,11 +161,16 @@ pub async fn login(
         status: "success".to_string(),
         user: filter_user,
         token,
+        refresh_token,
     });
 
     let mut headers = HeaderMap::new();
 
     headers.append(header::SET_COOKIE, cookie.to_string().parse().unwrap());
+    headers.append(
+        header::SET_COOKIE,
+        refresh_cookie.to_string().parse().unwrap(),
+    );
 
     let mut response = response.into_response();
     response.headers_mut().extend(headers);
