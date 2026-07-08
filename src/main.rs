@@ -9,7 +9,10 @@ mod models;
 mod router;
 mod utils;
 
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use dotenv::dotenv;
 
@@ -85,8 +88,10 @@ async fn main() {
 
     let (app_state, cors) = config_all_and_get_all_requirments().await;
 
+    let refresh_tokens: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
+
     // build our application with a single route
-    let app_api = router::create_routes(Arc::new(app_state)).layer(cors);
+    let app_api = router::create_routes(Arc::new(app_state), refresh_tokens).layer(cors);
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
