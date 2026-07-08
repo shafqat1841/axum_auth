@@ -136,6 +136,7 @@ pub struct UserLoginResponseDto {
     pub status: String,
     pub user: FilterUserDto,
     pub token: String,
+    pub refresh_token: String,
 }
 
 #[derive(Serialize, Deserialize)]
