@@ -1,33 +1,31 @@
 mod auth_routes;
 mod authorized_person_router;
 
-use std::{collections::HashMap, sync::{Arc, Mutex}};
-
 use axum::{Extension, Router, middleware, routing::get};
 
 use crate::{
-    AppState,
+    AllStates,
     middlewares::auth_middleware::auth,
     router::{auth_routes::auth_router, authorized_person_router::authorized_person_router},
 };
 
 pub fn authorized_routes() -> axum::Router {
-    let authorized_person_api = authorized_person_router().layer(middleware::from_fn(auth));
+    let authorized_person_api = authorized_person_router();
     authorized_person_api
 }
 
-pub fn create_routes(
-    app_state: Arc<AppState>,
-    refresh_tokens: Arc<Mutex<HashMap<String, String>>>,
-) -> axum::Router {
+pub fn create_routes(all_state: AllStates) -> axum::Router {
     let router = Router::new();
     let auth_api = auth_router();
-    let authorized_api = authorized_routes();
+
+    let middlweware_fn = middleware::from_fn(auth);
+
+    let authorized_api = authorized_routes().layer(middlweware_fn);
     let api_route = router
         .nest("/auth", auth_api)
         .merge(authorized_api)
-        .layer(Extension(app_state))
-        .layer(Extension(refresh_tokens));
+        .layer(Extension(all_state));
+    // .layer(Extension(refresh_tokens));
 
     let home_route = Router::new().route("/", get(home));
 
