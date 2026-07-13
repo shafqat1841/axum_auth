@@ -73,7 +73,7 @@ pub async fn register(
 }
 
 pub async fn login(
-    Extension(all_state): Extension<AllStates>,
+    Extension(mut all_state): Extension<AllStates>,
     Json(body): Json<LoginUserDto>,
 ) -> Result<impl IntoResponse, HttpError> {
     // Validate the input
@@ -126,9 +126,7 @@ pub async fn login(
     )
     .map_err(|e| HttpError::server_error(e.to_string()))?;
 
-    let mut tokens = all_state.refresh_tokens.lock().await;
-
-    tokens.insert(refresh_token.clone(), refresh_token.clone());
+    all_state.refresh_tokens.insert(refresh_token.clone(), refresh_token.clone());
 
     let cookie_duration = time::Duration::minutes(all_state.app_state.env.jwt_maxage); // Convert minutes to seconds
     let cookie = Cookie::build(("token", token.clone()))

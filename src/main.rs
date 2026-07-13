@@ -20,7 +20,6 @@ use axum::http::{
     HeaderValue, Method,
     header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
 };
-use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
 
 use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
@@ -37,7 +36,8 @@ pub struct AppState {
 #[derive(Clone)]
 pub struct AllStates {
     pub app_state: Arc<AppState>,
-    pub refresh_tokens: Arc<Mutex<HashMap<String, String>>>,
+    // pub refresh_tokens: Arc<Mutex<HashMap<String, String>>>,
+    pub refresh_tokens: HashMap<String, String>,
 }
 
 async fn get_database_pool(config: &Config) -> Pool<Postgres> {
@@ -78,7 +78,7 @@ fn get_app_state(configuration: &Config, pool: Pool<Postgres>) -> AppState {
 
 fn get_all_states(configuration: &Config, pool: Pool<Postgres>) -> AllStates {
     let app_state = Arc::new(get_app_state(configuration, pool));
-    let refresh_tokens = Arc::new(Mutex::new(HashMap::new()));
+    let refresh_tokens = HashMap::new();
     AllStates {
         app_state,
         refresh_tokens,

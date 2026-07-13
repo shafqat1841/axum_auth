@@ -62,9 +62,7 @@ async fn work_on_refresh_token(
 ) -> Result<UserAndCookie, HttpError> {
     let app_state = all_state.app_state;
 
-    let refresh_tokens_lock = all_state.refresh_tokens.lock();
-
-    if !refresh_tokens_lock.await.contains_key(&refresh_token) {
+    if !all_state.refresh_tokens.contains_key(&refresh_token) {
         return Err(HttpError::unauthorized(
             ErrorMessage::InvalidToken.to_string(),
         ));
