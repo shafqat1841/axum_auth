@@ -25,7 +25,6 @@ pub fn create_routes(all_state: AllStates) -> axum::Router {
         .nest("/auth", auth_api)
         .merge(authorized_api)
         .layer(Extension(all_state));
-    // .layer(Extension(refresh_tokens));
 
     let home_route = Router::new().route("/", get(home));
 
