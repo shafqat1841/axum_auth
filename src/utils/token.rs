@@ -1,9 +1,13 @@
 use axum::http::StatusCode;
 use chrono::{Duration, Utc};
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 
-use crate::errors::{ErrorMessage, HttpError};
+use crate::{
+    AllStates,
+    errors::{ErrorMessage, HttpError},
+    models::user_model::User,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TokenClaims {
@@ -16,7 +20,7 @@ pub fn create_token(
     user_id: &str,
     secret: &[u8],
     expires_in_seconds: i64,
-) -> Result<String,  jsonwebtoken::errors::Error> {
+) -> Result<String, jsonwebtoken::errors::Error> {
     if user_id.is_empty() {
         return Err(jsonwebtoken::errors::ErrorKind::InvalidSubject.into());
     }
@@ -24,23 +28,20 @@ pub fn create_token(
     let now = Utc::now();
     let iat = now.timestamp() as usize;
     let exp = (now + Duration::minutes(expires_in_seconds)).timestamp() as usize;
-    let claims: TokenClaims = TokenClaims { 
-        sub: user_id.to_string(), 
-        iat, 
-        exp, 
+    let claims: TokenClaims = TokenClaims {
+        sub: user_id.to_string(),
+        iat,
+        exp,
     };
 
     encode(
-        &Header::default(), 
-        &claims, 
+        &Header::default(),
+        &claims,
         &EncodingKey::from_secret(secret),
     )
 }
 
-pub fn decode_token<T: Into<String>>(
-    token: T,
-    secret: &[u8],
-) -> Result<String, HttpError> {
+pub fn decode_token<T: Into<String>>(token: T, secret: &[u8]) -> Result<String, HttpError> {
     let decoded = decode::<TokenClaims>(
         &token.into(),
         &DecodingKey::from_secret(secret),
@@ -49,6 +50,31 @@ pub fn decode_token<T: Into<String>>(
 
     match decoded {
         Ok(token) => Ok(token.claims.sub),
-        Err(_) => Err(HttpError::new(ErrorMessage::InvalidToken.to_string(), StatusCode::UNAUTHORIZED)),
+        Err(_) => Err(HttpError::new(
+            ErrorMessage::InvalidToken.to_string(),
+            StatusCode::UNAUTHORIZED,
+        )),
     }
+}
+
+pub fn create_main_token(user: &User, all_state: &AllStates) -> Result<String, HttpError> {
+    let token = create_token(
+        &user.id.to_string(),
+        &all_state.app_state.env.jwt_secret.as_bytes(),
+        all_state.app_state.env.jwt_maxage,
+    )
+    .map_err(|e| HttpError::server_error(e.to_string()))?;
+
+    Ok(token)
+}
+
+pub fn create_refresh_token(user: &User, all_state: &AllStates) -> Result<String, HttpError> {
+    let refresh_token = create_token(
+        &user.id.to_string(),
+        &all_state.app_state.env.refresh_jwt_secret.as_bytes(),
+        all_state.app_state.env.refresh_jwt_maxage,
+    )
+    .map_err(|e| HttpError::server_error(e.to_string()))?;
+
+    Ok(refresh_token)
 }
