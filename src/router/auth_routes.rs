@@ -4,7 +4,8 @@ use axum::{
     response::IntoResponse,
     routing::post,
 };
-use axum_extra::extract::cookie::Cookie;
+use axum_extra::extract::{CookieJar, cookie::Cookie};
+use axum_macros::{debug_handler};
 use validator::Validate;
 
 use crate::{
@@ -21,6 +22,45 @@ pub fn auth_router() -> Router {
     Router::new()
         .route("/register", post(register))
         .route("/login", post(login))
+}
+
+#[debug_handler]
+pub async fn logout(
+    cookie_jar: CookieJar,
+    Extension(mut all_state): Extension<AllStates>,
+) -> Result<impl IntoResponse, HttpError> {
+    let refresh_token_opt = cookie_jar
+        .get("refresh_token")
+        .map(|cookie| cookie.value().to_string());
+
+    let refresh_token = match refresh_token_opt {
+        Some(refresh_token) => refresh_token,
+        None => {
+            return Err(HttpError::unauthorized(
+                ErrorMessage::TokenNotProvided.to_string(),
+            ));
+        }
+    };
+
+    if !all_state.refresh_tokens.contains_key(&refresh_token) {
+        return Err(HttpError::unauthorized(
+            ErrorMessage::InvalidToken.to_string(),
+        ));
+    }
+
+    all_state.refresh_tokens.remove(&refresh_token);
+
+    let cookie_jar = cookie_jar.remove("refresh_token");
+
+    let  _ = cookie_jar.remove("token");
+
+    Ok((
+        StatusCode::OK,
+        Json(Response {
+            status: "success",
+            message: "Logout successful! User successfully logout".to_string(),
+        }),
+    ))
 }
 
 pub async fn register(
@@ -126,7 +166,9 @@ pub async fn login(
     )
     .map_err(|e| HttpError::server_error(e.to_string()))?;
 
-    all_state.refresh_tokens.insert(refresh_token.clone(), refresh_token.clone());
+    all_state
+        .refresh_tokens
+        .insert(refresh_token.clone(), refresh_token.clone());
 
     let cookie_duration = time::Duration::minutes(all_state.app_state.env.jwt_maxage); // Convert minutes to seconds
     let cookie = Cookie::build(("token", token.clone()))
