@@ -9,10 +9,15 @@ use axum_macros::debug_handler;
 use validator::Validate;
 
 use crate::{
-    AllStates, database::users_db::UserExt, dtos::user_dtos::{
+    AllStates,
+    database::users_db::UserExt,
+    dtos::user_dtos::{
         FilterUserDto, LoginUserDto, RegisterUserDto, Response, UserLoginResponseDto,
-    }, errors::{ErrorMessage, HttpError}, utils::{
-        password, token::{self, create_main_token, create_refresh_token},
+    },
+    errors::{ErrorMessage, HttpError},
+    utils::{
+        password,
+        token::{create_main_token, create_refresh_token},
     },
 };
 
@@ -128,8 +133,7 @@ pub async fn login(
         .http_only(true)
         .build();
 
-    let refresh_cookie_duration =
-        time::Duration::days(all_state.app_state.env.refresh_jwt_maxage); // Convert months to days
+    let refresh_cookie_duration = time::Duration::days(all_state.app_state.env.refresh_jwt_maxage); // Convert months to days
     let refresh_cookie = Cookie::build(("refresh_token", refresh_token.clone()))
         .path("/")
         .max_age(refresh_cookie_duration)
