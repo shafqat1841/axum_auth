@@ -1,8 +1,3 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
-
 use axum::{
     Extension, Json, Router,
     http::{HeaderMap, StatusCode, header},
@@ -13,7 +8,7 @@ use axum_extra::extract::cookie::Cookie;
 use validator::Validate;
 
 use crate::{
-    AppState,
+    AllStates,
     database::users_db::UserExt,
     dtos::user_dtos::{
         FilterUserDto, LoginUserDto, RegisterUserDto, Response, UserLoginResponseDto,
@@ -29,7 +24,7 @@ pub fn auth_router() -> Router {
 }
 
 pub async fn register(
-    Extension(app_state): Extension<Arc<AppState>>,
+    Extension(all_state): Extension<AllStates>,
     Json(body): Json<RegisterUserDto>,
 ) -> Result<impl IntoResponse, HttpError> {
     body.validate()
@@ -38,7 +33,8 @@ pub async fn register(
     let hash_password =
         password::hash(&body.password).map_err(|e| HttpError::server_error(e.to_string()))?;
 
-    let result = app_state
+    let result = all_state
+        .app_state
         .db_client
         .save_user(&body.username, &body.email, &hash_password)
         .await;
@@ -77,8 +73,7 @@ pub async fn register(
 }
 
 pub async fn login(
-    Extension(app_state): Extension<Arc<AppState>>,
-    Extension(refresh_tokens): Extension<Arc<Mutex<HashMap<String, String>>>>,
+    Extension(all_state): Extension<AllStates>,
     Json(body): Json<LoginUserDto>,
 ) -> Result<impl IntoResponse, HttpError> {
     // Validate the input
@@ -86,14 +81,16 @@ pub async fn login(
         .map_err(|e| HttpError::bad_request(e.to_string()))?;
 
     // Fetch user from the database
-    let mut result = app_state
+    let mut result = all_state
+        .app_state
         .db_client
         .get_user(None, None, Some(&body.identifier))
         .await
         .map_err(|e| HttpError::server_error(e.to_string()))?;
 
     if result.is_none() {
-        result = app_state
+        result = all_state
+            .app_state
             .db_client
             .get_user(None, Some(&body.identifier), None)
             .await
@@ -116,53 +113,39 @@ pub async fn login(
     // Create JWT token
     let token = token::create_token(
         &user.id.to_string(),
-        &app_state.env.jwt_secret.as_bytes(),
-        app_state.env.jwt_maxage,
+        &all_state.app_state.env.jwt_secret.as_bytes(),
+        all_state.app_state.env.jwt_maxage,
     )
     .map_err(|e| HttpError::server_error(e.to_string()))?;
 
     // Create a refresh token and store it in the hashmap which act as a cache for refresh tokens
     let refresh_token = token::create_token(
         &user.id.to_string(),
-        &app_state.env.refresh_jwt_secret.as_bytes(),
-        app_state.env.refresh_jwt_maxage,
+        &all_state.app_state.env.refresh_jwt_secret.as_bytes(),
+        all_state.app_state.env.refresh_jwt_maxage,
     )
     .map_err(|e| HttpError::server_error(e.to_string()))?;
 
-    match refresh_tokens.lock() {
-        Ok(mut tokens) => {
-            tokens.insert(refresh_token.clone(), refresh_token.clone());
-        }
-        Err(_) => {
-            return Err(HttpError::server_error(
-                "Failed to acquire lock for refresh tokens".to_string(),
-            ));
-        }
-    }
+    let mut tokens = all_state.refresh_tokens.lock().await;
 
-    let cookie_duration = time::Duration::minutes(app_state.env.jwt_maxage); // Convert minutes to seconds
+    tokens.insert(refresh_token.clone(), refresh_token.clone());
+
+    let cookie_duration = time::Duration::minutes(all_state.app_state.env.jwt_maxage); // Convert minutes to seconds
     let cookie = Cookie::build(("token", token.clone()))
         .path("/")
         .max_age(cookie_duration)
         .http_only(true)
         .build();
 
-    let refresh_cookie_duration = time::Duration::days(app_state.env.refresh_jwt_maxage * 30); // Convert months to days
-    let refresh_cookie = Cookie::build(("token", refresh_token.clone()))
+    let refresh_cookie_duration =
+        time::Duration::days(all_state.app_state.env.refresh_jwt_maxage * 30); // Convert months to days
+    let refresh_cookie = Cookie::build(("refresh_token", refresh_token.clone()))
         .path("/refresh_token")
         .max_age(refresh_cookie_duration)
         .http_only(true)
         .build();
 
     let filter_user = FilterUserDto::filter_user(&user);
-
-    // Prepare response
-    let response = axum::response::Json(UserLoginResponseDto {
-        status: "success".to_string(),
-        user: filter_user,
-        token,
-        refresh_token,
-    });
 
     let mut headers = HeaderMap::new();
 
@@ -171,6 +154,14 @@ pub async fn login(
         header::SET_COOKIE,
         refresh_cookie.to_string().parse().unwrap(),
     );
+
+    // Prepare response
+    let response = axum::response::Json(UserLoginResponseDto {
+        status: "success".to_string(),
+        user: filter_user,
+        token,
+        refresh_token,
+    });
 
     let mut response = response.into_response();
     response.headers_mut().extend(headers);
