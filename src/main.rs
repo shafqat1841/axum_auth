@@ -11,7 +11,7 @@ mod utils;
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc},
 };
 
 use dotenv::dotenv;
@@ -20,6 +20,7 @@ use axum::http::{
     HeaderValue, Method,
     header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
 };
+use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
 
 use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
@@ -31,6 +32,12 @@ use crate::{config::Config, db::DBClient};
 pub struct AppState {
     pub env: Config,
     pub db_client: DBClient,
+}
+
+#[derive(Clone)]
+pub struct AllStates {
+    pub app_state: Arc<AppState>,
+    pub refresh_tokens: Arc<Mutex<HashMap<String, String>>>,
 }
 
 async fn get_database_pool(config: &Config) -> Pool<Postgres> {
@@ -69,7 +76,17 @@ fn get_app_state(configuration: &Config, pool: Pool<Postgres>) -> AppState {
     }
 }
 
-pub async fn config_all_and_get_all_requirments() -> (AppState, CorsLayer) {
+fn get_all_states(configuration: &Config, pool: Pool<Postgres>) -> AllStates {
+    let app_state = Arc::new(get_app_state(configuration, pool));
+    let refresh_tokens = Arc::new(Mutex::new(HashMap::new()));
+    AllStates {
+        app_state,
+        refresh_tokens,
+    }
+
+}
+
+pub async fn config_all_and_get_all_requirments() -> (AllStates, CorsLayer) {
 
     let configuration = Config::init();
 
@@ -77,8 +94,8 @@ pub async fn config_all_and_get_all_requirments() -> (AppState, CorsLayer) {
 
     let cors = setup_cors();
 
-    let app_state = get_app_state(&configuration, pool);
-    (app_state, cors)
+    let all_state = get_all_states(&configuration, pool);
+    (all_state, cors)
 }
 
 
@@ -86,12 +103,10 @@ pub async fn config_all_and_get_all_requirments() -> (AppState, CorsLayer) {
 async fn main() {
     dotenv().ok();
 
-    let (app_state, cors) = config_all_and_get_all_requirments().await;
-
-    let refresh_tokens: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
+    let (all_states, cors) = config_all_and_get_all_requirments().await;
 
     // build our application with a single route
-    let app_api = router::create_routes(Arc::new(app_state), refresh_tokens).layer(cors);
+    let app_api = router::create_routes(all_states).layer(cors);
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
