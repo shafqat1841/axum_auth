@@ -8,6 +8,7 @@ argon2 = "0.5.3"
 async-trait = "0.1.89"
 axum = "0.8.9"
 axum-extra = { version = "0.12.6", features = ["cookie"] }
+axum-macros = "0.5.1"
 chrono = { version = "0.4.45", features = ["serde"] }
 dotenv = "0.15.0"
 jsonwebtoken = { version =  "10.4.0", features = ["rust_crypto"]}
