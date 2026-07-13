@@ -9,7 +9,7 @@ use crate::{
     database::users_db::UserExt,
     errors::{ErrorMessage, HttpError},
     models::user_model::User,
-    utils::token,
+    utils::token::{self, create_main_token},
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -24,32 +24,42 @@ struct UserAndCookie {
 
 async fn work_on_token(
     token: String,
-    all_state: AllStates,
-    // mut req: Request,
-    // next: Next,
-) -> Result<UserAndCookie, HttpError> {
-    let app_state = all_state.app_state;
+    all_state: &AllStates,
+) -> Result<UserAndCookie, ErrorMessage> {
+    let app_state = &all_state.app_state;
     let token_details = match token::decode_token(token, app_state.env.jwt_secret.as_bytes()) {
         Ok(token_details) => token_details,
         Err(_) => {
-            return Err(HttpError::unauthorized(
-                ErrorMessage::InvalidToken.to_string(),
-            ));
+            return Err(ErrorMessage::InvalidToken);
         }
     };
 
-    let user_id = uuid::Uuid::parse_str(&token_details.to_string())
-        .map_err(|_| HttpError::unauthorized(ErrorMessage::InvalidToken.to_string()))?;
+    let user_id = uuid::Uuid::parse_str(&token_details.to_string());
+
+    let user_id = match user_id {
+        Ok(user_id) => user_id,
+        Err(_) => return Err(ErrorMessage::InvalidToken),
+    };
 
     // Fetch user from database
     let user = app_state
         .db_client
         .get_user(Some(user_id), None, None)
-        .await
-        .map_err(|_| HttpError::unauthorized(ErrorMessage::UserNoLongerExist.to_string()))?;
+        .await;
 
-    let user =
-        user.ok_or_else(|| HttpError::unauthorized(ErrorMessage::UserNoLongerExist.to_string()))?;
+    let user = match user {
+        Ok(user) => user,
+        Err(_) => {
+            return Err(ErrorMessage::UserNoLongerExist);
+        }
+    };
+
+    let user = match user {
+        None => {
+            return Err(ErrorMessage::UserNoLongerExist);
+        }
+        Some(user) => user,
+    };
 
     Ok(UserAndCookie { user, cookie: None })
 }
@@ -57,12 +67,15 @@ async fn work_on_token(
 async fn work_on_refresh_token(
     refresh_token: String,
     all_state: AllStates,
-    // mut req: Request,
-    // next: Next,
 ) -> Result<UserAndCookie, HttpError> {
-    let app_state = all_state.app_state;
+    let app_state = &all_state.app_state;
 
-    if !all_state.refresh_tokens.contains_key(&refresh_token) {
+    if !&all_state
+        .refresh_tokens
+        .lock()
+        .await
+        .contains_key(&refresh_token)
+    {
         return Err(HttpError::unauthorized(
             ErrorMessage::InvalidToken.to_string(),
         ));
@@ -92,12 +105,7 @@ async fn work_on_refresh_token(
         user.ok_or_else(|| HttpError::unauthorized(ErrorMessage::UserNoLongerExist.to_string()))?;
 
     // Create JWT token
-    let token = token::create_token(
-        &user.id.to_string(),
-        app_state.env.jwt_secret.as_bytes(),
-        app_state.env.jwt_maxage,
-    )
-    .map_err(|e| HttpError::server_error(e.to_string()))?;
+    let token = create_main_token(&user, &all_state)?;
 
     let cookie_duration = time::Duration::minutes(app_state.env.jwt_maxage); // Convert minutes to seconds
     let cookie: Cookie<'_> = Cookie::build(("token", token.clone()))
@@ -137,40 +145,66 @@ pub async fn auth(
                 })
         });
 
-    let user_and_cookie = match cookies {
-        Some(token) => {
-            let user_and_cookie = work_on_token(token, all_state).await?;
-            user_and_cookie
-        }
+    let token = match cookies {
+        Some(token) => token,
         None => {
-            let refresh_token_opt = cookie_jar
-                .get("refresh_token")
-                .map(|cookie| cookie.value().to_string());
-
-            let token = match refresh_token_opt {
-                Some(refresh_token) => refresh_token,
-                None => {
-                    return Err(HttpError::unauthorized(
-                        ErrorMessage::TokenNotProvided.to_string(),
-                    ));
-                }
-            };
-
-            let user_and_cookie = work_on_refresh_token(token, all_state).await?;
-
-            user_and_cookie
+            return Err(HttpError::unauthorized(
+                ErrorMessage::TokenNotProvided.to_string(),
+            ));
         }
     };
 
-    req.extensions_mut().insert(JWTAuthMiddleware {
-        user: user_and_cookie.user.clone(),
-    });
-    let mut response = next.run(req).await;
-    if let Some(cookie) = user_and_cookie.cookie {
-        response
-            .headers_mut()
-            .append(header::SET_COOKIE, cookie.to_string().parse().unwrap());
+    let user_and_cookie = work_on_token(token, &all_state).await;
+
+    let mut user_and_cookie = match user_and_cookie {
+        Err(err) => match err {
+            ErrorMessage::UserNoLongerExist => {
+                return Err(HttpError::unauthorized(
+                    ErrorMessage::UserNoLongerExist.to_string(),
+                ));
+            }
+            _ => None,
+        },
+
+        Ok(user_and_cookie) => Some(user_and_cookie),
+    };
+
+    if let None = user_and_cookie {
+        let refresh_token_opt = cookie_jar
+            .get("refresh_token")
+            .map(|cookie| cookie.value().to_string());
+
+        let token = match refresh_token_opt {
+            Some(refresh_token) => refresh_token,
+            None => {
+                return Err(HttpError::unauthorized(
+                    ErrorMessage::TokenNotProvided.to_string(),
+                ));
+            }
+        };
+
+        let res = work_on_refresh_token(token, all_state).await?;
+        user_and_cookie = Some(res)
     }
 
-    Ok(response)
+    match user_and_cookie {
+        None => {
+            return Err(HttpError::unauthorized(
+                ErrorMessage::InvalidToken.to_string(),
+            ));
+        }
+        Some(user_and_cookie) => {
+            req.extensions_mut().insert(JWTAuthMiddleware {
+                user: user_and_cookie.user.clone(),
+            });
+            let mut response = next.run(req).await;
+            if let Some(cookie) = user_and_cookie.cookie {
+                response
+                    .headers_mut()
+                    .append(header::SET_COOKIE, cookie.to_string().parse().unwrap());
+            }
+
+            Ok(response)
+        }
+    }
 }
