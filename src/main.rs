@@ -9,11 +9,9 @@ mod models;
 mod router;
 mod utils;
 
-use std::{
-    collections::HashMap,
-    sync::{Arc},
-};
+use std::{collections::HashMap, sync::Arc};
 
+use anyhow::{Context, Result, anyhow};
 use dotenv::dotenv;
 
 use axum::http::{
@@ -27,7 +25,6 @@ use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
 
 use crate::{config::Config, db::DBClient};
 
-
 #[derive(Debug, Clone)]
 pub struct AppState {
     pub env: Config,
@@ -40,23 +37,16 @@ pub struct AllStates {
     pub refresh_tokens: Arc<Mutex<HashMap<String, String>>>,
 }
 
-async fn get_database_pool(config: &Config) -> Pool<Postgres> {
-    let pool = match PgPoolOptions::new()
+async fn get_database_pool(config: &Config) -> Result<Pool<Postgres>> {
+    let pool = PgPoolOptions::new()
         .max_connections(10)
         .connect(&config.database_url.clone())
         .await
-    {
-        Ok(pool) => {
-            println!("✅Connection to the database is successful!");
-            pool
-        }
-        Err(err) => {
-            println!("🔥 Failed to connect to the database: {:?}", err);
-            std::process::exit(1);
-        }
-    };
+        .map_err(|e| {
+            anyhow!("Failed to connect to the database: {e}")
+        })?;
 
-    pool
+    Ok(pool)
 }
 
 fn setup_cors() -> CorsLayer {
@@ -78,37 +68,59 @@ fn get_app_state(configuration: &Config, pool: Pool<Postgres>) -> AppState {
 
 fn get_all_states(configuration: &Config, pool: Pool<Postgres>) -> AllStates {
     let app_state = Arc::new(get_app_state(configuration, pool));
-    let refresh_tokens = Arc::new(Mutex::new( HashMap::new()));
+    let refresh_tokens = Arc::new(Mutex::new(HashMap::new()));
     AllStates {
         app_state,
         refresh_tokens,
     }
-
 }
 
-pub async fn config_all_and_get_all_requirments() -> (AllStates, CorsLayer) {
+pub async fn config_all_and_get_all_requirments() -> Result<(AllStates, CorsLayer)> {
+    let configuration = Config::init().context("Error making config")?;
 
-    let configuration = Config::init();
-
-    let pool = get_database_pool(&configuration).await;
+    let pool = get_database_pool(&configuration).await.map_err(|e| {
+        anyhow!("Fail to get database pool: {e}")
+    })?;
 
     let cors = setup_cors();
 
     let all_state = get_all_states(&configuration, pool);
-    (all_state, cors)
+    Ok((all_state, cors))
 }
-
 
 #[tokio::main]
 async fn main() {
     dotenv().ok();
 
-    let (all_states, cors) = config_all_and_get_all_requirments().await;
+    let config_all_res = config_all_and_get_all_requirments().await;
+
+    let (all_states, cors) = match config_all_res {
+        Ok(res) => res,
+        Err(err) => {
+            let error = anyhow!("Error from config all: {err}");
+            eprint!("{}", error);
+            std::process::exit(1);
+        }
+    };
 
     // build our application with a single route
     let app_api = router::create_routes(all_states).layer(cors);
 
     // run our app with hyper, listening globally on port 3000
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    axum::serve(listener, app_api).await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await;
+
+    let listener = match listener {
+        Err(e) => {
+            let err = anyhow!("Error at TcpListener binding {e}");
+            eprintln!("{}", err);
+            std::process::exit(1);
+        }
+        Ok(listener) => listener,
+    };
+
+    if let Err(e) = axum::serve(listener, app_api).await {
+        let err = anyhow!("Error at serving service: {e}");
+        eprintln!("{}", err);
+        std::process::exit(1);
+    };
 }
