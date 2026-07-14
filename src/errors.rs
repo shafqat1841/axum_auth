@@ -85,13 +85,6 @@ impl HttpError {
         }
     }
 
-    pub fn not_found(message: impl Into<String>) -> Self {
-        HttpError {
-            message: message.into(),
-            status: StatusCode::NOT_FOUND,
-        }
-    }
-
     pub fn bad_request(message: impl Into<String>) -> Self {
         HttpError {
             message: message.into(),
