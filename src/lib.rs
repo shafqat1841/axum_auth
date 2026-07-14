@@ -112,12 +112,15 @@ pub async fn app() {
             eprintln!("{}", err);
             std::process::exit(1);
         }
-        Ok(listener) => listener,
+        Ok(listener) => {
+            println!("TcpListener connected");
+            listener
+        }
     };
 
     if let Err(e) = axum::serve(listener, app_api).await {
         let err = anyhow!("Error at serving service: {e}");
         eprintln!("{}", err);
         std::process::exit(1);
-    };
+    }
 }
