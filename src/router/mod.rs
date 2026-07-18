@@ -46,7 +46,7 @@ async fn home() -> &'static str {
 mod tests {
     use super::*;
 
-     #[tokio::test]
+    #[tokio::test]
     async fn home_fn() {
         let result = home().await;
         assert_eq!(result, "hello world");
