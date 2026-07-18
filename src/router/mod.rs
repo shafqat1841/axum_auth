@@ -41,3 +41,14 @@ pub fn create_routes(all_state: AllStates) -> axum::Router {
 async fn home() -> &'static str {
     "hello world"
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+     #[tokio::test]
+    async fn home_fn() {
+        let result = home().await;
+        assert_eq!(result, "hello world");
+    }
+}
