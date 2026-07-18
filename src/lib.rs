@@ -1,13 +1,13 @@
-mod config;
-mod database;
-mod db;
-mod dtos;
-mod errors;
-mod handlers;
-mod middlewares;
-mod models;
-mod router;
-mod utils;
+pub mod config;
+pub mod database;
+pub mod db;
+pub mod dtos;
+pub mod errors;
+pub mod handlers;
+pub mod middlewares;
+pub mod models;
+pub mod router;
+pub mod utils;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -37,7 +37,7 @@ pub struct AllStates {
     pub refresh_tokens: Arc<Mutex<HashMap<String, String>>>,
 }
 
-async fn get_database_pool(config: &Config) -> Result<Pool<Postgres>> {
+pub async fn get_database_pool(config: &Config) -> Result<Pool<Postgres>> {
     let pool = PgPoolOptions::new()
         .max_connections(10)
         .connect(&config.database_url.clone())
