@@ -144,7 +144,6 @@ pub async fn auth<T>(
 where
     T: DatabaseClient + Clone + 'static,
 {
-    println!("auth middleware");
     let cookies = cookie_jar
         .get("token")
         .map(|cookie| cookie.value().to_string())
