@@ -23,19 +23,32 @@ use tower_http::cors::CorsLayer;
 
 use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
 
-use crate::{config::Config, db::DBClient};
+use crate::{
+    config::{Config, ConfigTrait},
+    db::{DBClient, DatabaseClient},
+};
 
-#[derive(Debug, Clone)]
-pub struct AppState {
+#[derive(Clone)]
+pub struct AppState<T>
+where
+    T: DatabaseClient,
+{
     pub env: Config,
-    pub db_client: DBClient,
+    pub db_client: Arc<T>,
+    // pub db_client: Arc<dyn DatabaseClient>,
 }
 
 #[derive(Clone)]
-pub struct AllStates {
-    pub app_state: Arc<AppState>,
+pub struct AllStates<T>
+where
+    T: DatabaseClient,
+{
+    pub app_state: Arc<AppState<T>>,
     pub refresh_tokens: Arc<Mutex<HashMap<String, String>>>,
 }
+
+pub type AllStatesDBClient = AllStates<DBClient>;
+pub type AppStateDBClient = AppState<DBClient>;
 
 pub async fn get_database_pool(config: &Config) -> Result<Pool<Postgres>> {
     let pool = PgPoolOptions::new()
@@ -56,15 +69,15 @@ fn setup_cors() -> CorsLayer {
     cors
 }
 
-fn get_app_state(configuration: &Config, pool: Pool<Postgres>) -> AppState {
-    let db_client = DBClient::new(pool);
+fn get_app_state(configuration: &Config, pool: Pool<Postgres>) -> AppStateDBClient {
+    let db_client = Arc::new(DBClient::new(pool));
     AppState {
         env: configuration.clone(),
         db_client,
     }
 }
 
-fn get_all_states(configuration: &Config, pool: Pool<Postgres>) -> AllStates {
+fn get_all_states(configuration: &Config, pool: Pool<Postgres>) -> AllStatesDBClient {
     let app_state = Arc::new(get_app_state(configuration, pool));
     let refresh_tokens = Arc::new(Mutex::new(HashMap::new()));
     AllStates {
@@ -73,7 +86,7 @@ fn get_all_states(configuration: &Config, pool: Pool<Postgres>) -> AllStates {
     }
 }
 
-pub async fn config_all_and_get_all_requirments() -> Result<(AllStates, CorsLayer)> {
+pub async fn config_all_and_get_all_requirments() -> Result<(AllStatesDBClient, CorsLayer)> {
     let configuration = Config::init().context("Error making config")?;
 
     let pool = get_database_pool(&configuration)
