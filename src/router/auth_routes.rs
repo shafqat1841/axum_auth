@@ -5,12 +5,11 @@ use axum::{
     routing::post,
 };
 use axum_extra::extract::{CookieJar, cookie::Cookie};
-use axum_macros::debug_handler;
 use validator::Validate;
 
 use crate::{
-    AllStatesDBClient,
-    database::users_db::UserExt,
+    AllStates,
+    db::DatabaseClient,
     dtos::user_dtos::{
         FilterUserDto, LoginUserDto, RegisterUserDto, Response, UserLoginResponseDto,
     },
@@ -21,16 +20,22 @@ use crate::{
     },
 };
 
-pub fn auth_router() -> Router {
+pub fn auth_router<T>() -> Router
+where
+    T: DatabaseClient + Clone + 'static,
+{
     Router::new()
-        .route("/register", post(register))
-        .route("/login", post(login))
+        .route("/register", post(register::<T>))
+        .route("/login", post(login::<T>))
 }
 
-pub async fn register(
-    Extension(all_state): Extension<AllStatesDBClient>,
+pub async fn register<T>(
+    Extension(all_state): Extension<AllStates<T>>,
     Json(body): Json<RegisterUserDto>,
-) -> Result<impl IntoResponse, HttpError> {
+) -> Result<impl IntoResponse, HttpError>
+where
+    T: DatabaseClient + Clone + 'static,
+{
     body.validate()
         .map_err(|e| HttpError::bad_request(e.to_string()))?;
 
@@ -76,10 +81,13 @@ pub async fn register(
     }
 }
 
-pub async fn login(
-    Extension(all_state): Extension<AllStatesDBClient>,
+pub async fn login<T>(
+    Extension(all_state): Extension<AllStates<T>>,
     Json(body): Json<LoginUserDto>,
-) -> Result<impl IntoResponse, HttpError> {
+) -> Result<impl IntoResponse, HttpError>
+where
+    T: DatabaseClient + Clone + 'static,
+{
     // Validate the input
     body.validate()
         .map_err(|e| HttpError::bad_request(e.to_string()))?;
@@ -164,11 +172,13 @@ pub async fn login(
     Ok(response)
 }
 
-#[debug_handler]
-pub async fn logout(
+pub async fn logout<T>(
     cookie_jar: CookieJar,
-    Extension(all_state): Extension<AllStatesDBClient>,
-) -> Result<impl IntoResponse, HttpError> {
+    Extension(all_state): Extension<AllStates<T>>,
+) -> Result<impl IntoResponse, HttpError>
+where
+    T: DatabaseClient + Clone + 'static,
+{
     let refresh_token_opt = cookie_jar
         .get("refresh_token")
         .map(|cookie| cookie.value().to_string());

@@ -13,11 +13,14 @@ use crate::{
     },
 };
 
-pub fn authorized_routes() -> axum::Router {
+pub fn authorized_routes<T>() -> axum::Router
+where
+    T: DatabaseClient + Clone + 'static,
+{
     let authorized_person_api = authorized_person_router();
 
     let router = Router::new();
-    let logout_api = router.route("/logout", get(logout));
+    let logout_api = router.route("/logout", get(logout::<T>));
 
     authorized_person_api.merge(logout_api)
 }
@@ -27,9 +30,9 @@ where
     T: DatabaseClient + Clone + 'static,
 {
     let router = Router::new();
-    let auth_api = auth_router();
+    let auth_api = auth_router::<T>();
 
-    let authorized_api = authorized_routes().layer(middleware::from_fn(auth::<T>));
+    let authorized_api = authorized_routes::<T>().layer(middleware::from_fn(auth::<T>));
 
     let api_route = router
         .nest("/auth", auth_api)
