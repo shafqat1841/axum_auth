@@ -1,40 +1,45 @@
+mod common;
+
+use crate::common::config_mock::ConfigMockExt;
+use crate::common::db_mock::DBClientMock;
 use anyhow::{Result, anyhow};
 use axum_auth_v2::config::Config;
-use axum_auth_v2::db::DBClient;
 use axum_auth_v2::router::create_routes;
+use axum_auth_v2::{AllStates, AppState};
 
 use axum::{body::Body, extract::Request, http::StatusCode};
-use axum_auth_v2::{AllStates, AppState, get_database_pool};
 use tower::ServiceExt;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
 // You might need to make these fields/structs public or create a test helper in your main crate
 
-async fn create_mock_state() -> Result<AllStates> {
+async fn create_mock_state() -> Result<AllStates<DBClientMock>> {
     // You'll need access to Config::default() or build a dummy one
-    let dummy_config = Config::init()?;
-
-      let pool = get_database_pool(&dummy_config)
-        .await
-        .map_err(|e| anyhow!("Fail to get database pool: {e}"))?;
+    let dummy_config = Config::mock()?;
 
     // Create an uninitialized/mock DBClient if possible
-    let dummy_db = DBClient::new(pool);
+    let dummy_db = Arc::new(DBClientMock::mock());
 
-    Ok(AllStates {
-        app_state: Arc::new(AppState {
-            env: dummy_config,
-            db_client: dummy_db,
-        }),
+    let app_state = Arc::new(AppState {
+        env: dummy_config,
+        db_client: dummy_db,
+    });
+
+    let all_states = AllStates {
+        app_state,
         refresh_tokens: Arc::new(Mutex::new(HashMap::new())),
-    })
+    };
+
+    Ok(all_states)
 }
 
 #[tokio::test]
 async fn test_home_route() {
-    let mock_state = create_mock_state().await
+    let mock_state = create_mock_state()
+        .await
         .map_err(|e| {
             let text = anyhow!("Error: {e}");
             panic!("{:?}", text);
@@ -52,7 +57,8 @@ async fn test_home_route() {
 
 #[tokio::test]
 async fn test_authorized_route_fails_without_auth() {
-    let mock_state = create_mock_state().await
+    let mock_state = create_mock_state()
+        .await
         .map_err(|e| {
             let text = anyhow!("Error: {e}");
             panic!("{:?}", text);
@@ -79,7 +85,8 @@ async fn test_authorized_route_fails_without_auth() {
 
 #[tokio::test]
 async fn test_auth_route_exists() {
-    let mock_state = create_mock_state().await
+    let mock_state = create_mock_state()
+        .await
         .map_err(|e| {
             let text = anyhow!("Error: {e}");
             panic!("{:?}", text);
