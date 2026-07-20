@@ -47,9 +47,6 @@ where
     pub refresh_tokens: Arc<Mutex<HashMap<String, String>>>,
 }
 
-pub type AllStatesDBClient = AllStates<DBClient>;
-pub type AppStateDBClient = AppState<DBClient>;
-
 pub async fn get_database_pool(config: &Config) -> Result<Pool<Postgres>> {
     let pool = PgPoolOptions::new()
         .max_connections(10)
@@ -69,7 +66,7 @@ fn setup_cors() -> CorsLayer {
     cors
 }
 
-fn get_app_state(configuration: &Config, pool: Pool<Postgres>) -> AppStateDBClient {
+fn get_app_state(configuration: &Config, pool: Pool<Postgres>) -> AppState<DBClient> {
     let db_client = Arc::new(DBClient::new(pool));
     AppState {
         env: configuration.clone(),
@@ -77,7 +74,7 @@ fn get_app_state(configuration: &Config, pool: Pool<Postgres>) -> AppStateDBClie
     }
 }
 
-fn get_all_states(configuration: &Config, pool: Pool<Postgres>) -> AllStatesDBClient {
+fn get_all_states(configuration: &Config, pool: Pool<Postgres>) -> AllStates<DBClient> {
     let app_state = Arc::new(get_app_state(configuration, pool));
     let refresh_tokens = Arc::new(Mutex::new(HashMap::new()));
     AllStates {
@@ -86,7 +83,7 @@ fn get_all_states(configuration: &Config, pool: Pool<Postgres>) -> AllStatesDBCl
     }
 }
 
-pub async fn config_all_and_get_all_requirments() -> Result<(AllStatesDBClient, CorsLayer)> {
+pub async fn config_all_and_get_all_requirments() -> Result<(AllStates<DBClient>, CorsLayer)> {
     let configuration = Config::init().context("Error making config")?;
 
     let pool = get_database_pool(&configuration)
