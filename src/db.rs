@@ -1,6 +1,8 @@
 use sqlx::{Pool, Postgres};
 
-pub trait DatabaseClient: Send + Sync {}
+use crate::database::users_db::UserExt;
+
+pub trait DatabaseClient: Send + Sync + UserExt {}
 
 #[derive(Debug, Clone)]
 pub struct DBClient {
