@@ -9,7 +9,7 @@ use axum_macros::debug_handler;
 use validator::Validate;
 
 use crate::{
-    AllStates,
+    AllStatesDBClient,
     database::users_db::UserExt,
     dtos::user_dtos::{
         FilterUserDto, LoginUserDto, RegisterUserDto, Response, UserLoginResponseDto,
@@ -28,7 +28,7 @@ pub fn auth_router() -> Router {
 }
 
 pub async fn register(
-    Extension(all_state): Extension<AllStates>,
+    Extension(all_state): Extension<AllStatesDBClient>,
     Json(body): Json<RegisterUserDto>,
 ) -> Result<impl IntoResponse, HttpError> {
     body.validate()
@@ -77,7 +77,7 @@ pub async fn register(
 }
 
 pub async fn login(
-    Extension(all_state): Extension<AllStates>,
+    Extension(all_state): Extension<AllStatesDBClient>,
     Json(body): Json<LoginUserDto>,
 ) -> Result<impl IntoResponse, HttpError> {
     // Validate the input
@@ -167,7 +167,7 @@ pub async fn login(
 #[debug_handler]
 pub async fn logout(
     cookie_jar: CookieJar,
-    Extension(all_state): Extension<AllStates>,
+    Extension(all_state): Extension<AllStatesDBClient>,
 ) -> Result<impl IntoResponse, HttpError> {
     let refresh_token_opt = cookie_jar
         .get("refresh_token")

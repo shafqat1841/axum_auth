@@ -5,7 +5,7 @@ use axum_macros::debug_middleware;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AllStates,
+    AllStatesDBClient,
     database::users_db::UserExt,
     errors::{ErrorMessage, HttpError},
     models::user_model::User,
@@ -24,7 +24,7 @@ struct UserAndCookie {
 
 async fn work_on_token(
     token: String,
-    all_state: &AllStates,
+    all_state: &AllStatesDBClient,
 ) -> Result<UserAndCookie, ErrorMessage> {
     let app_state = &all_state.app_state;
     let token_details = match token::decode_token(token, app_state.env.jwt_secret.as_bytes()) {
@@ -66,7 +66,7 @@ async fn work_on_token(
 
 async fn work_on_refresh_token(
     refresh_token: String,
-    all_state: AllStates,
+    all_state: AllStatesDBClient,
 ) -> Result<UserAndCookie, HttpError> {
     let app_state = &all_state.app_state;
 
@@ -124,7 +124,7 @@ async fn work_on_refresh_token(
 #[debug_middleware]
 pub async fn auth(
     cookie_jar: CookieJar,
-    Extension(all_state): Extension<AllStates>,
+    Extension(all_state): Extension<AllStatesDBClient>,
     mut req: Request,
     next: Next,
 ) -> Result<impl IntoResponse, HttpError> {

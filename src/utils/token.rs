@@ -4,7 +4,7 @@ use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, deco
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AllStates,
+    AllStatesDBClient,
     errors::{ErrorMessage, HttpError},
     models::user_model::User,
 };
@@ -57,7 +57,7 @@ pub fn decode_token<T: Into<String>>(token: T, secret: &[u8]) -> Result<String, 
     }
 }
 
-pub fn create_main_token(user: &User, all_state: &AllStates) -> Result<String, HttpError> {
+pub fn create_main_token(user: &User, all_state: &AllStatesDBClient) -> Result<String, HttpError> {
     let token = create_token(
         &user.id.to_string(),
         &all_state.app_state.env.jwt_secret.as_bytes(),
@@ -68,7 +68,10 @@ pub fn create_main_token(user: &User, all_state: &AllStates) -> Result<String, H
     Ok(token)
 }
 
-pub fn create_refresh_token(user: &User, all_state: &AllStates) -> Result<String, HttpError> {
+pub fn create_refresh_token(
+    user: &User,
+    all_state: &AllStatesDBClient,
+) -> Result<String, HttpError> {
     let refresh_token = create_token(
         &user.id.to_string(),
         &all_state.app_state.env.refresh_jwt_secret.as_bytes(),

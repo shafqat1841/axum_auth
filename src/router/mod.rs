@@ -5,6 +5,7 @@ use axum::{Extension, Router, middleware, routing::get};
 
 use crate::{
     AllStates,
+    db::DatabaseClient,
     middlewares::auth_middleware::auth,
     router::{
         auth_routes::{auth_router, logout},
@@ -21,7 +22,10 @@ pub fn authorized_routes() -> axum::Router {
     authorized_person_api.merge(logout_api)
 }
 
-pub fn create_routes(all_state: AllStates) -> axum::Router {
+pub fn create_routes<T>(all_state: AllStates<T>) -> axum::Router
+where
+    T: DatabaseClient + Clone + 'static,
+{
     let router = Router::new();
     let auth_api = auth_router();
 
