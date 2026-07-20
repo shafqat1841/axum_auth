@@ -5,8 +5,8 @@ use axum_macros::debug_middleware;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AllStatesDBClient,
-    database::users_db::UserExt,
+    AllStates,
+    db::DatabaseClient,
     errors::{ErrorMessage, HttpError},
     models::user_model::User,
     utils::token::{self, create_main_token},
@@ -22,11 +22,24 @@ struct UserAndCookie {
     pub cookie: Option<Cookie<'static>>,
 }
 
-async fn work_on_token(
-    token: String,
-    all_state: &AllStatesDBClient,
-) -> Result<UserAndCookie, ErrorMessage> {
+async fn work_on_token<T>(
+    cookies: Option<String>,
+    all_state: &AllStates<T>,
+) -> Result<UserAndCookie, ErrorMessage>
+where
+    T: DatabaseClient + Clone + 'static,
+{
     let app_state = &all_state.app_state;
+    let token = match cookies {
+        Some(token) => token,
+        None => {
+            // return Err(HttpError::unauthorized(
+            //     ErrorMessage::TokenNotProvided.to_string(),
+            // ));
+            return Err(ErrorMessage::TokenNotProvided);
+        }
+    };
+
     let token_details = match token::decode_token(token, app_state.env.jwt_secret.as_bytes()) {
         Ok(token_details) => token_details,
         Err(_) => {
@@ -64,10 +77,13 @@ async fn work_on_token(
     Ok(UserAndCookie { user, cookie: None })
 }
 
-async fn work_on_refresh_token(
+async fn work_on_refresh_token<T>(
     refresh_token: String,
-    all_state: AllStatesDBClient,
-) -> Result<UserAndCookie, HttpError> {
+    all_state: AllStates<T>,
+) -> Result<UserAndCookie, HttpError>
+where
+    T: DatabaseClient + Clone + 'static,
+{
     let app_state = &all_state.app_state;
 
     if !&all_state
@@ -121,14 +137,17 @@ async fn work_on_refresh_token(
 }
 
 // Middleware function for role-based authorization
-#[debug_middleware]
-pub async fn auth(
+// #[debug_middleware]
+pub async fn auth<T>(
     cookie_jar: CookieJar,
-    Extension(all_state): Extension<AllStatesDBClient>,
+    Extension(all_state): Extension<AllStates<T>>,
     mut req: Request,
     next: Next,
-) -> Result<impl IntoResponse, HttpError> {
-    // Extract access token from cookie or Authorization header
+) -> Result<impl IntoResponse, HttpError>
+where
+    T: DatabaseClient + Clone + 'static,
+{
+    println!("auth middleware");
     let cookies = cookie_jar
         .get("token")
         .map(|cookie| cookie.value().to_string())
@@ -145,16 +164,7 @@ pub async fn auth(
                 })
         });
 
-    let token = match cookies {
-        Some(token) => token,
-        None => {
-            return Err(HttpError::unauthorized(
-                ErrorMessage::TokenNotProvided.to_string(),
-            ));
-        }
-    };
-
-    let user_and_cookie = work_on_token(token, &all_state).await;
+    let user_and_cookie = work_on_token(cookies, &all_state).await;
 
     let mut user_and_cookie = match user_and_cookie {
         Err(err) => match err {
