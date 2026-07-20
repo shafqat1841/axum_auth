@@ -1,7 +1,6 @@
 use axum::{Extension, extract::Request, http::header, middleware::Next, response::IntoResponse};
 
 use axum_extra::extract::cookie::{Cookie, CookieJar};
-use axum_macros::debug_middleware;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -136,8 +135,6 @@ where
     })
 }
 
-// Middleware function for role-based authorization
-// #[debug_middleware]
 pub async fn auth<T>(
     cookie_jar: CookieJar,
     Extension(all_state): Extension<AllStates<T>>,
