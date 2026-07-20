@@ -29,7 +29,7 @@ where
     let router = Router::new();
     let auth_api = auth_router();
 
-    let authorized_api = authorized_routes().layer(middleware::from_fn(auth));
+    let authorized_api = authorized_routes().layer(middleware::from_fn(auth::<T>));
 
     let api_route = router
         .nest("/auth", auth_api)
