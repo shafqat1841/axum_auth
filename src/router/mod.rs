@@ -1,7 +1,9 @@
 mod auth_routes;
 mod authorized_person_router;
 
-use axum::{Extension, Router, middleware, routing::get};
+use axum::{
+    Extension, Router, http::StatusCode, middleware, response::IntoResponse, routing::{any, get},
+};
 
 use crate::{
     AllStates,
@@ -40,9 +42,16 @@ where
         .layer(Extension(all_state));
 
     let home_route = Router::new().route("/", get(home));
-
-    let app_api = Router::new().merge(home_route).nest("/api", api_route);
+    // let wrong_route = Router::new()
+    let app_api = Router::new()
+        .merge(home_route)
+        .nest("/api", api_route)
+        .route("/{*wildcard}", any(wrong_path));
     app_api
+}
+
+async fn wrong_path() -> impl IntoResponse {
+    (StatusCode::NOT_FOUND,"No path like this exist")
 }
 
 async fn home() -> &'static str {
