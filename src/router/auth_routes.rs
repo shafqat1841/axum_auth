@@ -42,6 +42,38 @@ where
     let hash_password =
         password::hash(&body.password).map_err(|e| HttpError::server_error(e.to_string()))?;
 
+    let found_result = all_state
+        .app_state
+        .db_client
+        .get_user(None, Some(&body.username), None)
+        .await
+        .map_err(|e| {
+            let http_err = HttpError::unique_constraint_violation(e.to_string());
+            http_err
+        })?;
+
+    if let Some(_) = found_result {
+        return Err(HttpError::unique_constraint_violation(
+            ErrorMessage::UsernameExist.to_string(),
+        ));
+    }
+
+    let found_result = all_state
+        .app_state
+        .db_client
+        .get_user(None, None, Some(&body.email))
+        .await
+        .map_err(|e| {
+            let http_err = HttpError::unique_constraint_violation(e.to_string());
+            http_err
+        })?;
+
+    if let Some(_) = found_result {
+        return Err(HttpError::unique_constraint_violation(
+            ErrorMessage::EmailExist.to_string(),
+        ));
+    }
+
     let result = all_state
         .app_state
         .db_client
