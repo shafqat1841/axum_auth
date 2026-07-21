@@ -20,7 +20,5 @@ pub async fn test_wrong_route() {
     // Convert bytes to a UTF-8 string
     let body_string = String::from_utf8(body_bytes.to_vec()).unwrap();
 
-    println!("Actual body text: {}", body_string);
-
     assert_eq!(body_string, "No path like this exist");
 }
