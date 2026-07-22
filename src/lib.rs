@@ -8,6 +8,7 @@ pub mod middlewares;
 pub mod models;
 pub mod router;
 pub mod utils;
+pub mod unit_tests;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -35,7 +36,6 @@ where
 {
     pub env: Config,
     pub db_client: Arc<T>,
-    // pub db_client: Arc<dyn DatabaseClient>,
 }
 
 #[derive(Clone)]
@@ -57,7 +57,7 @@ pub async fn get_database_pool(config: &Config) -> Result<Pool<Postgres>> {
     Ok(pool)
 }
 
-fn setup_cors() -> CorsLayer {
+pub fn setup_cors() -> CorsLayer {
     let cors = CorsLayer::new()
         .allow_origin("https://localhost:3000".parse::<HeaderValue>().unwrap())
         .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE])
@@ -66,7 +66,7 @@ fn setup_cors() -> CorsLayer {
     cors
 }
 
-fn get_app_state(configuration: &Config, pool: Pool<Postgres>) -> AppState<DBClient> {
+pub fn get_app_state(configuration: &Config, pool: Pool<Postgres>) -> AppState<DBClient> {
     let db_client = Arc::new(DBClient::new(pool));
     AppState {
         env: configuration.clone(),
@@ -74,7 +74,7 @@ fn get_app_state(configuration: &Config, pool: Pool<Postgres>) -> AppState<DBCli
     }
 }
 
-fn get_all_states(configuration: &Config, pool: Pool<Postgres>) -> AllStates<DBClient> {
+pub fn get_all_states(configuration: &Config, pool: Pool<Postgres>) -> AllStates<DBClient> {
     let app_state = Arc::new(get_app_state(configuration, pool));
     let refresh_tokens = Arc::new(Mutex::new(HashMap::new()));
     AllStates {
