@@ -237,12 +237,12 @@ where
 
     all_state.refresh_tokens.lock().await.remove(&refresh_token);
 
-    let cookie_jar = cookie_jar.remove("refresh_token");
+    let cookie_jar = cookie_jar.remove("refresh_token").remove("token");
 
-    let _ = cookie_jar.remove("token");
 
     Ok((
         StatusCode::OK,
+        cookie_jar,
         Json(Response {
             status: "success",
             message: "Logout successful! User successfully logout".to_string(),
