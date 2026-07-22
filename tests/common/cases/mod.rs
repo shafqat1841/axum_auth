@@ -3,3 +3,4 @@ pub mod unauthorize_req;
 pub mod register_user;
 pub mod login_user;
 pub mod wrong_route;
+pub mod logout_test;
