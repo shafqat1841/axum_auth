@@ -1,6 +1,6 @@
 use crate::{
     db::DatabaseClient,
-    handlers::auth_handlers::{login, register},
+    handlers::auth_handlers::{login_handler::login, register_handler::register},
 };
 
 use axum::{Router, routing::post};
