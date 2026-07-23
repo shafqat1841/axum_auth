@@ -1,8 +1,7 @@
-
 use crate::{
     AllStates,
     db::DatabaseClient,
-    dtos::user_dtos::{FilterUserDto, LoginUserDto, Response, UserLoginResponseDto},
+    dtos::user_dtos::{FilterUserDto, LoginUserDto, UserLoginResponseDto},
     errors::{ErrorMessage, HttpError},
     utils::{
         password,
@@ -11,10 +10,10 @@ use crate::{
 };
 use axum::{
     Extension, Json,
-    http::{HeaderMap, StatusCode, header},
+    http::{HeaderMap, header},
     response::IntoResponse,
 };
-use axum_extra::extract::{CookieJar, cookie::Cookie};
+use axum_extra::extract::cookie::Cookie;
 use validator::Validate;
 
 pub async fn login<T>(
