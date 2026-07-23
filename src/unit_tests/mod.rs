@@ -4,3 +4,7 @@ pub mod login_handler_test;
 pub mod logout_handler_test;
 pub mod authorized_persons_only_handler_test;
 pub mod home_path_handlers_test;
+pub mod wrong_path_handlers_test;
+pub mod get_user_and_cookie_by_token_test;
+pub mod get_user_and_cookie_by_refresh_token_test;
+pub mod auth_middleware_test;
