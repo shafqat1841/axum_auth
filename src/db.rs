@@ -1,6 +1,9 @@
-use sqlx::{Pool, Postgres};
+use std::sync::Arc;
 
-use crate::database::users_db::UserExt;
+use sqlx::{Pool, Postgres};
+use tokio::sync::Mutex;
+
+use crate::{database::users_db::UserExt, models::user_model::User};
 
 pub trait DatabaseClient: Send + Sync + UserExt {}
 
@@ -16,3 +19,17 @@ impl DBClient {
 }
 
 impl DatabaseClient for DBClient {}
+
+#[derive(Debug, Clone)]
+pub struct DBClientMock {
+    pub users: Arc<Mutex<Vec<User>>>,
+}
+
+impl DBClientMock {
+    pub fn mock() -> Self {
+        let users = Arc::new(Mutex::new(Vec::new()));
+        DBClientMock { users }
+    }
+}
+
+impl DatabaseClient for DBClientMock {}

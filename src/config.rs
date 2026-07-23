@@ -1,8 +1,4 @@
 use anyhow::{Context, Result};
-
-pub trait ConfigTrait {
-    fn init() -> Result<Config>;
-}
 #[derive(Debug, Clone)]
 pub struct Config {
     pub database_url: String,
@@ -39,8 +35,23 @@ impl Config {
     }
 }
 
+pub trait ConfigTrait {
+    fn init() -> Result<Config>;
+}
+
 impl ConfigTrait for Config {
     fn init() -> Result<Config> {
         Self::parse_env()
+    }
+}
+
+pub trait ConfigMockExt {
+    fn mock() -> Result<Config>;
+}
+
+impl ConfigMockExt for Config {
+    fn mock() -> Result<Config> {
+        dotenv::from_filename(".env.test").ok();
+        Config::parse_env()
     }
 }

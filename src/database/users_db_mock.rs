@@ -1,8 +1,6 @@
+use crate::{database::users_db::UserExt, db::DBClientMock, models::user_model::User};
 use async_trait::async_trait;
-use axum_auth_v2::{database::users_db::UserExt, models::user_model::User};
 use uuid::Uuid;
-
-use crate::common::db_mock::DBClientMock;
 
 #[async_trait]
 impl UserExt for DBClientMock {
